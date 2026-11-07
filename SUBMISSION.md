@@ -10,3 +10,9 @@ Videos (folder "UPM CVAR VIDEOS"):
 - Exercise 1.1, Python node: CVAR Course - Exercise 1.1 (Python node).mp4
 - Exercise 1.2: CVAR Course - Exercise 1.2.mp4
 - Exercise 2: CVAR Course - Exercise 2.mp4
+
+GitHub cannot play videos in the browser, so they need to be downloaded.
+
+The same videos are also on YouTube (unlisted playlist):
+
+https://www.youtube.com/playlist?list=PLGh71Bhl6Qs8
