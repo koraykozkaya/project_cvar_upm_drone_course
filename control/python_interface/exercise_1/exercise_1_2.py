@@ -1,32 +1,7 @@
 #!/usr/bin/env python3
 
 # Copyright 2026 Universidad Politécnica de Madrid
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-#    * Redistributions of source code must retain the above copyright
-#      notice, this list of conditions and the following disclaimer.
-#
-#    * Redistributions in binary form must reproduce the above copyright
-#      notice, this list of conditions and the following disclaimer in the
-#      documentation and/or other materials provided with the distribution.
-#
-#    * Neither the name of the Universidad Politécnica de Madrid nor the names of its
-#      contributors may be used to endorse or promote products derived from
-#      this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
+# (BSD-3-Clause license, see repository)
 """Drone Controller Node.
 
 This module implements a ROS2 node for controlling a drone using the
@@ -46,19 +21,9 @@ from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 
 
 class DroneController(Node):
-    """Drone Controller class for managing drone operations.
-
-    This class handles subscribing to drone state information,
-    publishing motion commands, and calling services to control the
-    drone's operational state.
-    """
+    """Drone Controller class for managing drone operations."""
 
     def __init__(self):
-        """Initialize the DroneController node.
-
-        Sets up subscribers, publishers, service clients, and the main
-        control timer.
-        """
         super().__init__('drone_controller')
         # QoS profile for reliable topics
         reliable_qos = QoSProfile(
@@ -69,7 +34,7 @@ class DroneController(Node):
         best_effort_qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT, history=HistoryPolicy.KEEP_LAST, depth=10
         )
-        
+
         self.callback_group = ReentrantCallbackGroup()
 
         # Subscribers
@@ -86,15 +51,17 @@ class DroneController(Node):
         )
 
         # Service clients
-        
+
         # Control Mode Service Client
         self.control_mode_client = self.create_client(
             SetControlMode, '/drone0/controller/set_control_mode', callback_group=self.callback_group
         )
 
         # Path Service Client
-        # TODO (Exercise 1.2): Create service client for path request
-        self.path_request_client = None
+        # ★ TODO 1
+        self.path_request_client = self.create_client(
+            RequestPath, '/request_path', callback_group=self.callback_group
+        )
 
         # Class variables
         self.state_pose: PoseStamped = PoseStamped()
@@ -108,24 +75,29 @@ class DroneController(Node):
         self.get_logger().info('Drone Controller Node initialized')
 
     def state_pose_callback(self, msg):
-        """Callback for state pose messages.
-
-        :param msg: The received pose message
-        :type msg: PoseStamped
-        """
+        """Callback for state pose messages."""
         self.state_pose = msg
 
     def run(self):
         """Main control loop."""
-        # TODO (Exercise 1.2): Call service client for path request
-        # Create service client for: /request_path
-        # Service type: drone_course/srv/RequestPath (RequestPath)
+        # ★ TODO 2
         if not len(self.path) > 0:
+           
+            if not self.path_request_client.service_is_ready():
+                self.get_logger().warn('Path service is not available', throttle_duration_sec=1.0)
+                return
+
             self.get_logger().info('Requesting path from service...')
-            req = RequestPath.Request()
-            response : RequestPath.Response = None
-            self.path = []
-        
+            req = RequestPath.Request()  
+            response: RequestPath.Response = self.path_request_client.call(req)
+            self.path = list(response.path)
+
+            if len(self.path) == 0:
+                self.get_logger().warn('Received an empty path')
+                return
+            for i, p in enumerate(self.path):
+                self.get_logger().info(f'  point {i}: ({p.x:.1f}, {p.y:.1f}, {p.z:.1f})')
+
         # Check if control mode is set, if not, call the service to set it
         if not self.control_mode_set:
             self.get_logger().info('Calling control mode service...')
@@ -181,12 +153,12 @@ class DroneController(Node):
 
         # Publish motion reference command
         self.pose_pub.publish(position_msg)
-        
+
         if position_error < 0.2:
             self.get_logger().info(
                 'Drone has reached the target position', throttle_duration_sec=1.0
             )
-            
+
             self.path_idx = (self.path_idx + 1) % len(self.path)
 
 

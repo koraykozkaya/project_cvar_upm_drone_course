@@ -1,32 +1,7 @@
 #!/usr/bin/env python3
 
 # Copyright 2026 Universidad Politécnica de Madrid
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-#    * Redistributions of source code must retain the above copyright
-#      notice, this list of conditions and the following disclaimer.
-#
-#    * Redistributions in binary form must reproduce the above copyright
-#      notice, this list of conditions and the following disclaimer in the
-#      documentation and/or other materials provided with the distribution.
-#
-#    * Neither the name of the Universidad Politécnica de Madrid nor the names of its
-#      contributors may be used to endorse or promote products derived from
-#      this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
+# (BSD-3-Clause license, see repository)
 """Drone Controller Node.
 
 This module implements a ROS2 node for controlling a drone using the
@@ -46,19 +21,9 @@ from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 
 
 class DroneController(Node):
-    """Drone Controller class for managing drone operations.
-
-    This class handles subscribing to drone state information,
-    publishing motion commands, and calling services to control the
-    drone's operational state.
-    """
+    """Drone Controller class for managing drone operations."""
 
     def __init__(self):
-        """Initialize the DroneController node.
-
-        Sets up subscribers, publishers, service clients, and the main
-        control timer.
-        """
         super().__init__('drone_controller')
         # QoS profile for reliable topics
         reliable_qos = QoSProfile(
@@ -69,31 +34,33 @@ class DroneController(Node):
         best_effort_qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT, history=HistoryPolicy.KEEP_LAST, depth=10
         )
-        
+
         # Callback group for handling synchronous service calls from timer
         self.callback_group = ReentrantCallbackGroup()
 
         # Subscribers
-        # TODO(Exercise 1): Subcribe to localization pose
-        # Subscribe to topic: /drone0/self_localization/pose
-        # Message type: geometry_msgs/msg/PoseStamped (PoseStamped)
-        # Callback: self.state_pose_callback
-        # QoS: best effort
-        self.pose_sub = None
+        # ★ TODO 1:
+        self.pose_sub = self.create_subscription(
+            PoseStamped,
+            '/drone0/self_localization/pose',
+            self.state_pose_callback,
+            best_effort_qos,
+        )
 
         # Publishers
-        # TODO(Exercise 1): Publish motion reference command
-        # Publish to topic: /drone0/motion_reference/pose
-        # Message type: geometry_msgs/msg/PoseStamped (PoseStamped)
-        # QoS: reliable
-        self.pose_pub = None
+        # ★ TODO 2
+        self.pose_pub = self.create_publisher(
+            PoseStamped,
+            '/drone0/motion_reference/pose',
+            reliable_qos,
+        )
 
         # Class variables
         self.state_pose: PoseStamped = PoseStamped()
         self.control_mode_set: bool = False
-        self.path: list[Point] = [Point(x=4.0, y=0.0, z=2.1), 
-                                  Point(x=11.0, y=0.0, z=2.1), 
-                                  Point(x=11.0, y=5.0, z=2.1), 
+        self.path: list[Point] = [Point(x=4.0, y=0.0, z=2.1),
+                                  Point(x=11.0, y=0.0, z=2.1),
+                                  Point(x=11.0, y=5.0, z=2.1),
                                   Point(x=4.0, y=5.0, z=2.1)]
         self.path_idx: int = 0
 
@@ -103,11 +70,7 @@ class DroneController(Node):
         self.get_logger().info('Drone Controller Node initialized')
 
     def state_pose_callback(self, msg):
-        """Callback for state pose messages.
-
-        :param msg: The received pose message
-        :type msg: PoseStamped
-        """
+        """Callback for state pose messages."""
         self.state_pose = msg
 
     def run(self):
@@ -139,22 +102,24 @@ class DroneController(Node):
         position_error = (position_error_x**2 + position_error_y**2 + position_error_z**2) ** 0.5
 
         # Publish motion reference command
-        # TODO(Exercise 1): Publish the generated motion reference command to /drone0/motion_reference/pose
+        # ★ TODO 3: hedefi yayınla
+        self.pose_pub.publish(position_msg)
 
         if position_error < 0.2:
-            self.get_logger().info(
-                'Drone has reached the target position', throttle_duration_sec=1.0
-            )
-            # TODO(Exercise 1): Update self.path_idx to move to the next position in the PATH list
-            self.path_idx = 1
+            # ★ TODO 4: sıradaki noktaya geç, sonuncudaysa orada kal
+            if self.path_idx < len(self.path) - 1:
+                self.path_idx += 1
+                self.get_logger().info(
+                    f'Waypoint reached, going to point {self.path_idx}: '
+                    f'({self.path[self.path_idx].x}, {self.path[self.path_idx].y}, '
+                    f'{self.path[self.path_idx].z})'
+                )
+            else:
+                self.get_logger().info('Circuit completed', throttle_duration_sec=2.0)
 
 
 def main(args=None):
-    """Main entry point for the drone controller node.
-
-    :param args: Command line arguments
-    :type args: list
-    """
+    """Main entry point for the drone controller node."""
     rclpy.init(args=args)
     drone_controller = DroneController()
 
